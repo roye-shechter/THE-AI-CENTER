@@ -35,7 +35,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 XAI_API_KEY = os.getenv("XAI_API_KEY")
 
 # --- Model & File Config ---
-MODEL_NAME_CHAT = 'gemini-2.0-flash'
+MODEL_NAME_CHAT = 'gemini-2.5-flash'
 MODEL_NAME_IMAGE = 'imagen-4.0-generate-001'
 MODEL_NAME_LLAMA = "llama-3.3-70b-versatile"
 DB_FILE = "bot_database.db"
