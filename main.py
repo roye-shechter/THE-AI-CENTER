@@ -227,6 +227,12 @@ async def bot(request: Request, From: str = Form(...), Body: str = Form(""), Num
                 save_message(From, "model", res.text)
                 twiml.message(res.text)
             except Exception as e:
+                import traceback
+                print("\n" + "=" * 40, flush=True)
+                print(f"🔥 GEMINI CRASH REPORT 🔥", flush=True)
+                print(f"Error details: {str(e)}", flush=True)
+                traceback.print_exc()
+                print("=" * 40 + "\n", flush=True)
                 twiml.message("חלה תקלה קטנה, המערכת מאתחלת את עצמה... נסה שוב.")
 
     elif current_model == "5":
