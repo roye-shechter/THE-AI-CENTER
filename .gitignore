@@ -1,0 +1,15 @@
+# Environments
+.env
+venv/
+.venv/
+
+# Database
+bot_database.db
+
+# Media
+images/
+
+# IDE and Python
+.idea/
+__pycache__/
+*.pyc
