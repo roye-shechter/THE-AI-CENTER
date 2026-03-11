@@ -1,10 +1,12 @@
 fastapi
-uvicorn[standard]
-python-multipart
-requests
+uvicorn
+python-dotenv
+PyPDF2
+pinecone
 google-genai
 groq
+twilio
+requests
 openai
 anthropic
-twilio
-python-dotenv
+python-multipart

@@ -1,158 +1,140 @@
-# 🌐 Universal AI WhatsApp Gateway
-### Multi-Model AI Orchestration Platform for WhatsApp
+# 🚀 AI Center: Enterprise Multi-Agent WhatsApp Architecture
 
-**Author:** Roye Schechter  
+**Developed by:** Roye Schechter
 
-A high-performance backend system that transforms WhatsApp into a **multi-model AI command center**, enabling users to interact with several leading LLMs through a single unified interface.
+## 📌 Overview
+AI Center is a highly scalable, multi-modal AI gateway accessible directly via WhatsApp. Unlike standard single-model chatbots, this system features a **Semantic Routing Engine** that autonomously directs user queries to the most efficient LLM based on context, complexity, and media presence. 
 
-The platform provides **dynamic model routing, persistent conversational memory, and multimodal capabilities** — all built on a scalable asynchronous architecture.
-
----
-
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-Async%20Framework-green.svg)
-![WhatsApp](https://img.shields.io/badge/WhatsApp-Twilio%20Integration-darkgreen.svg)
-![AI Models](https://img.shields.io/badge/AI-Gemini%20%7C%20Llama%20%7C%20GPT%20%7C%20Claude%20%7C%20Grok-orange.svg)
+The infrastructure boasts a built-in **RAG (Retrieval-Augmented Generation)** pipeline for long-term memory, multi-modal processing (audio and image analysis), and seamless integration with the world's leading AI providers.
 
 ---
-
-## 🚀 Project Overview
-
-The **Universal AI Gateway** acts as an orchestration layer between users and multiple AI providers. Instead of integrating with each model separately, the system provides:
-
-- A **single conversational interface** via WhatsApp
-- Dynamic **on-the-fly model switching**
-- **Persistent context memory** (maintains context even when switching models)
-- **Multimodal processing** (Text, Voice, and Image generation/analysis)
-
----
-
-## 🧠 Supported AI Models
-
-| Provider | Model | Modality |
-|--------|--------|--------|
-| **Google** | Gemini 2.0 Flash | Text, Vision, Audio, Image Gen (Imagen 4) |
-| **Meta** | Llama 3.3 70B (via Groq) | High-speed Text |
-| **OpenAI** | GPT-4o | Text, Vision |
-| **Anthropic** | Claude 3.5 Sonnet | Text, Vision |
-| **xAI** | Grok-2 | Text |
-
-*Note: The system architecture allows adding new models with minimal configuration.*
-
----
-
-## 🏗️ System Architecture
+## 🏗 System Flow Architecture
 
 ```text
-                           📱 User (WhatsApp)
-                                  │
-                                  ▼
-                            ☁️ Twilio Webhook
-                                  │
-                                  ▼
-                        ⚙️ FastAPI Gateway (main.py)
-                                  │
-      ┌─────────────┬─────────────┼─────────────┬─────────────┐
-      ▼             ▼             ▼             ▼             ▼
-   OpenAI       Anthropic        xAI          Google        Meta/Groq
-  (GPT-4o)    (Claude 3.5)    (Grok-2)     (Gemini 2.0)   (Llama 3.3)
-      │             │             │             │             │
-      └─────────────┴─────────────┼─────────────┴─────────────┘
-                                  ▼
-                         🗄️ SQLite Database
-                    (Session Management & Chat History)
-```
+                         ┌──────────────────────────────┐
+                         │        WhatsApp Users        │
+                         │  Text / Audio / Image / PDF  │
+                         └───────────────┬──────────────┘
+                                         │
+                                         ▼
+                         ┌──────────────────────────────┐
+                         │           Twilio API         │
+                         │        WhatsApp Webhook      │
+                         └───────────────┬──────────────┘
+                                         │
+                                         ▼
+                         ┌──────────────────────────────┐
+                         │         FastAPI Backend      │
+                         │    State & Route Controller  │
+                         └───────────────┬──────────────┘
+                                         │
+               ┌─────────────────────────┴─────────────────────────┐
+               │ User selects Direct Agent (1-5) or Smart Agent (0)│
+               ▼                                                   ▼
+ ┌───────────────────────────┐                       ┌───────────────────────────┐
+ │     DIRECT AGENTS (1-5)   │                       │    SMART MANAGER (0)      │
+ │ Bypass Memory & Routing   │                       │ Autonomous Orchestration  │
+ └──────┬───────────┬────────┘                       └─────────────┬─────────────┘
+        │           │                                              │
+        ▼           ▼                                              ▼
+  ┌──────────┐ ┌──────────┐                        ┌──────────────────────────────┐
+  │  OpenAI  │ │Anthropic │                        │     Knowledge Layer (RAG)    │
+  │  GPT-4o  │ │ Claude   │                        │ PDF Ingestion & Pinecone DB  │
+  └──────────┘ └──────────┘                        └──────────────┬───────────────┘
+        │           │                                             │
+        ▼           ▼                                             ▼
+  ┌──────────┐ ┌──────────┐                        ┌──────────────────────────────┐
+  │  Gemini  │ │  Meta    │                        │  Intent Classifier (Llama)   │
+  │  Direct  │ │  Llama   │                        │ Fast text OR Complex media?  │
+  └──────────┘ └──────────┘                        └──────────────┬───────────────┘
+        │           │                                             │
+        └─────┬─────┘                             ┌───────────────┴───────────────┐
+              │                                   ▼                               ▼
+              │                     ┌──────────────────────────┐    ┌──────────────────────────┐
+              │                     │        Groq Llama        │    │      Google Gemini       │
+              │                     │ (Fast Text Inference)    │    │ (Multimodal & Reasoning) │
+              │                     └─────────────┬────────────┘    └──────────────┬───────────┘
+              │                                   │                                │
+              └───────────────────────────────────┼────────────────────────────────┘
+                                                  ▼
+                                   ┌──────────────────────────────┐
+                                   │       Twilio Response        │
+                                   │  Auto-Chunking (>1500 chars) │
+                                   └──────────────────────────────┘
+                                   
+```                                   
+## ✨ Key Features & Technical Highlights
 
-The backend functions as a **model orchestration layer**, routing requests to the selected AI engine while seamlessly saving the interaction history to the database.
+### 1. 🧠 Smart Autonomous Routing (Zero-Agent)
+The system utilizes a lightweight, ultra-fast LLM (`Llama-3.3-70b` via Groq) as an "Intent Classifier". 
+* It analyzes incoming prompts in milliseconds.
+* Standard text queries are handled locally by the fast model to save costs and reduce latency.
+* Complex queries or messages containing media (Audio/Images/PDFs) are automatically dynamically routed to a heavy-duty multi-modal agent (`Gemini 2.0 Flash/1.5 Flash`).
 
----
+### 2. 📚 RAG Pipeline & Long-Term Memory
+Built a complete ingestion and retrieval pipeline for document chatting.
+* **Ingestion:** Downloads PDFs sent via WhatsApp, extracts text using `PyPDF2`, chunks the data, generates vector embeddings via Google's embedding model, and stores them in **Pinecone**.
+* **Retrieval:** Contextually retrieves top-k relevant chunks to augment the prompt before sending it to the LLM, giving the AI long-term memory of user documents.
 
-## ✨ Core Features
+### 3. 🎤 Multi-Modal Processing
+Users can send voice notes and images directly in WhatsApp. The backend intercepts Twilio media URLs, downloads the binary files, and utilizes Gemini's native multi-modal capabilities to transcribe, summarize, and analyze the content on the fly.
 
-### 1. Multi-Model AI Switching
-Users can dynamically switch between 5 different AI engines during the conversation using a clean, unified menu.
+### 4. ⚙️ Resilient Infrastructure & API Management
+Designed with production-grade constraints in mind:
+* **Twilio Payload Management:** Implemented an automated chunking algorithm to bypass Twilio's strict 1600-character limit, ensuring long LLM responses (like document summaries) are cleanly split and delivered sequentially without failing.
+* **State Management:** Uses `SQLite` as a persistence layer to track the active agent state for each user phone number, allowing seamless context-switching between different AI models.
+* **Fault Tolerance:** Comprehensive `try/except` blocks around external API calls prevent server crashes during quota limits (e.g., HTTP 429) or missing API keys, returning graceful error messages to the user.
 
-### 2. Persistent Conversation Memory
-User context is stored using **SQLite**, mapped by their phone number. The history follows the user, allowing conversations to continue logically.
+### 5. 🌐 Multi-Provider Gateway
+A unified interface allowing users to manually switch between top-tier AI models by simply sending a digit:
+* `1` - **OpenAI** (GPT-4o)
+* `2` - **Anthropic** (Claude 3.5 Sonnet)
+* `3` - **Google** (Gemini)
+* `4` - **Meta** (Llama 3.3 via Groq)
+* `5` - **xAI** (Grok)
 
-### 3. Multimodal Processing
-The gateway supports advanced interactions:
-- **Visual Intelligence:** Analyzing incoming images.
-- **Generative Art:** Generating images dynamically.
-- **Voice Recognition:** Processing WhatsApp audio messages.
-
-### 4. Automatic Garbage Collection
-A background asynchronous task runs continuously to clean up database sessions older than 24 hours, preventing database bloat and ensuring optimal performance.
-
----
-
-## ⚙️ Tech Stack & Dependencies
-
-- **Backend:** Python 3.11, FastAPI (async framework), Uvicorn
-- **AI SDKs:** `google-genai`, `groq`, `openai`, `anthropic`
-- **Infrastructure:** SQLite3, Twilio API, ngrok (for local tunneling)
-- **Environment Management:** `python-dotenv`
-
----
-
-## 📋 Prerequisites
-
-Before running the project, ensure you have the following:
-1. A **Twilio** account with a WhatsApp Sandbox activated.
-2. Active API Keys from the respective AI providers (Google Studio, Groq, OpenAI, Anthropic, xAI).
-3. Python 3.11+ installed on your local machine.
-
----
-
-## 🔐 Security & Configuration
-
-Sensitive credentials are strictly managed using environment variables. Create a `.env` file in the root directory:
-
-```env
-GEMINI_API_KEY=your_google_key
-GROQ_API_KEY=your_groq_key
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-XAI_API_KEY=your_xai_key
-
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-```
-*Never commit your `.env` file to version control.*
-
----
-
-## 🧪 Running the Project
-
-1. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Start the FastAPI Server:**
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-3. **Expose the Localhost (Development):**
-   ```bash
-   ngrok http 8000
-   ```
-   *Update your Twilio Sandbox Webhook with the generated ngrok URL appended with `/webhook`.*
 
 ---
 
+## 🛠️ Tech Stack
+* **Backend Framework:** Python, FastAPI, Uvicorn (Asynchronous processing)
+* **Databases:** Pinecone (Vector DB), SQLite (Relational DB)
+* **AI & LLMs:** Google GenAI SDK, Groq API, OpenAI, Anthropic
+* **Integrations:** Twilio API (WhatsApp Webhooks)
+* **Utilities:** PyPDF2, Python-dotenv, Requests
+
+## 💬 Example Interaction
+
+User (WhatsApp):
+"Summarize the PDF I just sent."
+
+System Flow:
+1. Twilio webhook receives message
+2. FastAPI downloads the PDF
+3. RAG pipeline processes document
+4. Relevant chunks retrieved from Pinecone
+5. Gemini generates contextual summary
+
+Bot Response:
+"Here is a summary of your document..."
+---
 ## 🔮 Future Improvements
 
-- Implementing automatic **smart routing** (evaluating prompt complexity and routing to the cheapest/fastest model).
-- Integrating a Vector Database (e.g., Pinecone/Chroma) for **long-term semantic memory** (RAG).
-- Full deployment pipeline to cloud platforms like Render or AWS.
+• Web dashboard for monitoring AI routing  
+• Docker containerization  
+• Redis caching layer  
+• Streaming responses  
+• Observability (Langfuse / OpenTelemetry)
 
----
+## 🚀 Getting Started
 
-# 👨‍💻 Author
+### Prerequisites
+1. Python 3.9+
+2. A Twilio Developer account with a WhatsApp Sandbox.
+3. API Keys for Pinecone, Groq, and Gemini (OpenAI and Anthropic are optional).
 
-**Roye Schechter** Software developer focusing on **AI systems, backend infrastructure, and intelligent automation**.
-
----
-*Engineering the future of AI communication.*
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone [https://github.com/YourUsername/AI-Center.git](https://github.com/YourUsername/AI-Center.git)
+   cd AI-Center
