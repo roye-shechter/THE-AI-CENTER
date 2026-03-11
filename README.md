@@ -133,8 +133,39 @@ Bot Response:
 2. A Twilio Developer account with a WhatsApp Sandbox.
 3. API Keys for Pinecone, Groq, and Gemini (OpenAI and Anthropic are optional).
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/YourUsername/AI-Center.git](https://github.com/YourUsername/AI-Center.git)
-   cd AI-Center
+### 1. Installation
+
+Clone the repository to your local machine:
+```bash
+git clone https://gitlab.com/roye.schechter-group/roye.schechter-project.git
+cd roye.schechter-project
+```
+
+Install the required Python packages:
+
+```bash
+pip install -r requirements.txt
+```
+2. Configuration
+
+Create a .env file in the root directory and populate it with your API keys. This file is ignored by Git for security:
+```bash
+TWILIO_ACCOUNT_SID=your_twilio_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_token_here
+GEMINI_API_KEY=your_google_gemini_key_here
+GROQ_API_KEY=your_groq_api_key_here
+PINECONE_KEY=your_pinecone_api_key_here
+PINECONE_INDEX_NAME=nexus-knowledge
+```
+3. Execution
+
+To run the server locally for testing (ensure you have Ngrok running for the webhook):
+
+```bash
+uvicorn main:app --reload
+```
+For production deployment (Render/Cloud), the start command should be:
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+Developed by Roye Schechter ⚡
