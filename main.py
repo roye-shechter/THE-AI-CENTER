@@ -238,7 +238,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 
         # Retrieve context from Pinecone
         context = retrieve_context(Body, From) if Body else ""
-        system_prompt = "You are Roye's assistant. ALWAYS reply in Hebrew. Be concise and professional. Do not exceed 500 characters unless necessary."
+        system_prompt = "You are the user assistant. ALWAYS reply in Hebrew. Be concise and professional. Do not exceed 500 characters unless necessary."
         if context: system_prompt += f"\n\nContext from documents:\n{context}"
 
         # Route dynamically
@@ -267,7 +267,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 )
                 answer = response.text
             except Exception as e:
-                print(f"🔥 Agent 0 (Gemini) Error: {e}")
+                print(f"🔥 Agent 0 (gemini) Error: {e}")
                 answer = "❌ שגיאה זמנית בחיבור לסוכן 0."
         else:
             try:
