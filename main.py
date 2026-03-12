@@ -258,7 +258,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     os.remove(path)
 
                 response = gemini_client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.0-flash-exp",
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         tools=[{"google_search": {}}]
@@ -309,7 +309,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         elif current_mode == "3":
             try:
                 # תוקן כאן מ- gemini-2.5-flash ל- gemini-2.0-flash
-                res = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=[short_body])
+                res = gemini_client.models.generate_content(model="gemini-2.0-flash-exp", contents=[short_body])
                 answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
