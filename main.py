@@ -254,7 +254,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     os.remove(path)
 
                 response = gemini_client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.0-flash",  # <--- שודרג ל-2.0
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         tools=[types.Tool(google_search=types.GoogleSearch())]
@@ -304,8 +304,8 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
-                res = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=[short_body])
-                answer = res.text
+                    res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[Body])
+                    answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
         elif current_mode == "4":
@@ -337,7 +337,9 @@ app = FastAPI()
 
 # Mount the media directory so Twilio can download generated images
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
-
+@app.get("/")
+def health_check():
+    return {"status": "AI CENTER is running perfectly 🚀"}
 @app.post("/webhook")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks, From: str = Form(...),
                            Body: str = Form(""),
@@ -351,4 +353,5 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks, 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    port = int(os.environ.get("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port)
