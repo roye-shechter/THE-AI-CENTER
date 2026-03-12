@@ -24,7 +24,10 @@ from twilio.rest import Client
 # MODULE 1: CONFIGURATION & INITIALIZATION
 # ==========================================
 load_dotenv()
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options={'api_version': 'v1'}
+)
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Initialize Pinecone Vector Database for Long-Term Memory
@@ -258,10 +261,10 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     os.remove(path)
 
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.0-flash-exp",
+                    model="gemini-1.5-flash",
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
-                        tools=[{"google_search": {}}]
+                        tools=[types.Tool(google_search=types.GoogleSearch())]
                     ),
                     contents=[types.Content(role="user", parts=user_parts)]
                 )
@@ -308,8 +311,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
-                # תוקן כאן מ- gemini-2.5-flash ל- gemini-2.0-flash
-                res = gemini_client.models.generate_content(model="gemini-2.0-flash-exp", contents=[short_body])
+                res = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=[short_body])
                 answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
