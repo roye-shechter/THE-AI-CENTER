@@ -24,10 +24,7 @@ from twilio.rest import Client
 # MODULE 1: CONFIGURATION & INITIALIZATION
 # ==========================================
 load_dotenv()
-gemini_client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options={'api_version': 'v1'}
-)
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Initialize Pinecone Vector Database for Long-Term Memory
@@ -89,7 +86,7 @@ def send_whatsapp(to_number: str, content: str, media_url: str = None):
 # ==========================================
 def get_embedding(text: str):
     """Generates vector embeddings for text chunks using Gemini."""
-    target_model = "text-embedding-004"
+    target_model = "gemini-embedding-001"
     try:
         res = gemini_client.models.embed_content(
             model=target_model,
@@ -98,12 +95,8 @@ def get_embedding(text: str):
         )
         return res.embeddings[0].values
     except Exception as e:
-        res = gemini_client.models.embed_content(
-            model=f"models/{target_model}",
-            contents=text,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY", output_dimensionality=768)
-        )
-        return res.embeddings[0].values
+        print(f"🔥 Embedding Error: {e}")
+        return [0.0] * 768 # רשת ביטחון כדי שהבוט לא ישתוק
 
 def ingest_pdf(file_url: str, phone: str):
     """Downloads a PDF, extracts text, chunks it, and uploads vectors to Pinecone."""
