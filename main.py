@@ -164,7 +164,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
     # --- 6.1 DYNAMIC UI / MENU DISPLAY ---
     if user_msg in ["menu", "תפריט", "היי", "שלום", "נקה", "hi", "hey", "אהלן"] and not is_media:
         menu_msg = (
-            "\u200E\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0*AI CENTER*\n\n"
+            "\u202B🔹 ══════ *AI CENTER* ══════ 🔹\u202C\n\n"
             "\u202Bאנא בחר את סוכן ה-AI המבוקש:\u202C\n\n"
             "\u200E0️⃣ *המנהל החכם (Smart Manager)* 🧠\n\n"
             "\u200E1️⃣ *ChatGPT (OpenAI)*\n\n"
@@ -174,7 +174,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             "\u200E5️⃣ *Grok (xAI)*\n\n"
             "\u202B⚠️ *אזהרה:* חלק מהמודלים דורשים חשבון Premium לתשתית החברה המפתחת.\u202C\n\n"
             "\u202B📍 שלח מספר לבחירה או 'נקה' לאיפוס.\u202C\n\n"
-            "\u202B_Developed by Roye Schechter_ ⚡\u202C"
+            "\u202BDeveloped by Roye Schechter ⚡\u202C"
         )
         send_whatsapp(From, menu_msg)
         return
@@ -188,7 +188,8 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 "\u202B*תכונות המערכת:*\u202C\n\n"
                 "\u202B📄 *ניהול ידע:* למידה, ניתוח ושימור תוכן מקבצי PDF.\u202C\n\n\n"
                 "\u202B⚡ *אופטימיזציה:* ניתוב אוטומטי למודל המהיר ביותר.\u202C\n\n\n"
-                "\u202B🎨 *הבנה ויצירה חזותית:* ניתוח תמונות והקלטות, ויצירת תמונות חדשות (התחל את המשפט במילה 'צייר').\u202C\n\n\n"
+                "\u202B🎨 *יצירה וניתוח ויזואלי:* יצירת תמונות חדשות (התחל משפט במילה 'צייר') וניתוח תמונות שתשלח.\u202C\n\n\n"
+                "\u202B🎤 *תמלול וניתוח שמע:* שלח הקלטת קול (Voice Note) או קובץ שמע, והבוט יתמלל וינתח אותם.\u202C\n\n\n"
                 "\u202B_Developed by Roye Schechter_ ⚡\u202C"
             )
             send_whatsapp(From, msg)
