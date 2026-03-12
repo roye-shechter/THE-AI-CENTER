@@ -52,7 +52,7 @@ The infrastructure boasts a built-in **RAG (Retrieval-Augmented Generation)** pi
               │                                   ▼                               ▼
               │                     ┌──────────────────────────┐    ┌──────────────────────────┐
               │                     │        Groq Llama        │    │      Google Gemini       │
-              │                     │ (Fast Text Inference)    │    │ (Multimodal & Reasoning) │
+              │                     │ (Fast Text Inference)    │    │ (Vision, RAG & Imagen 3) │
               │                     └─────────────┬────────────┘    └──────────────┬───────────┘
               │                                   │                                │
               └───────────────────────────────────┼────────────────────────────────┘
@@ -92,15 +92,17 @@ A unified interface allowing users to manually switch between top-tier AI models
 * `3` - **Google** (Gemini)
 * `4` - **Meta** (Llama 3.3 via Groq)
 * `5` - **xAI** (Grok)
-
+### 6. 🎨 Image Generation & Vision (NEW)
+* **Text-to-Image:** Integrated with Google's Imagen 3. Simply type "צייר" (Draw) followed by your prompt to generate and receive high-quality images directly in WhatsApp.
+* **Computer Vision:** Send images to the bot, and Agent 0 will analyze and describe them using Gemini 2.0 Flash.
 
 ---
 
 ## 🛠️ Tech Stack
 * **Backend Framework:** Python, FastAPI, Uvicorn (Asynchronous processing)
 * **Databases:** Pinecone (Vector DB), SQLite (Relational DB)
-* **AI & LLMs:** Google GenAI SDK, Groq API, OpenAI, Anthropic
-* **Integrations:** Twilio API (WhatsApp Webhooks)
+* **AI & LLMs:** Google GenAI SDK (Gemini & Imagen 3), Groq API, OpenAI, Anthropic, xAI
+ * * **Integrations:** Twilio API (WhatsApp Webhooks)
 * **Utilities:** PyPDF2, Python-dotenv, Requests
 
 ## 💬 Example Interaction
@@ -131,7 +133,7 @@ Bot Response:
 ### Prerequisites
 1. Python 3.9+
 2. A Twilio Developer account with a WhatsApp Sandbox.
-3. API Keys for Pinecone, Groq, and Gemini (OpenAI and Anthropic are optional).
+3. API Keys for Pinecone, Groq, and Gemini (OpenAI, Anthropic, and xAI are optional).
 
 ### 1. Installation
 

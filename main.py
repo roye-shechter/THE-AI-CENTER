@@ -59,25 +59,25 @@ def set_user_state(phone: str, model_id: str):
 # ==========================================
 # MODULE 3: COMMUNICATION GATEWAY
 # ==========================================
-def send_whatsapp(to_number: str, content: str):
+def send_whatsapp(to_number: str, content: str, media_url: str = None):
     """
     Sends WhatsApp messages via Twilio.
-    Includes logic to split messages exceeding Twilio's 1600-character limit.
+    Supports sending media (images) via public URLs.
     """
     try:
         twilio = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
-
-        # Limit set to 1500 to provide a safe buffer below the 1600 threshold
         limit = 1500
-        parts = [content[i:i + limit] for i in range(0, len(content), limit)]
+        parts = [content[i:i + limit] for i in range(0, len(content), limit)] if content else [""]
 
-        for part in parts:
-            twilio.messages.create(
-                from_="whatsapp:+14155238886",  # Verify this is the new active sandbox number
-                body=part,
-                to=to_number
-            )
-            time.sleep(0.5)  # Pause to maintain message sequence
+        for i, part in enumerate(parts):
+            kwargs = {"from_": "whatsapp:+14155238886", "to": to_number, "body": part}
+
+            # Attach media ONLY to the first message part
+            if media_url and i == 0:
+                kwargs["media_url"] = [media_url]
+
+            twilio.messages.create(**kwargs)
+            time.sleep(0.5)
     except Exception as e:
         print(f"🔥 Twilio Error: {e}")
 
@@ -155,7 +155,7 @@ def intent_classifier(user_input: str, has_media: bool) -> str:
 # ==========================================
 # MODULE 6: CORE WORKER (LOGIC CONTROLLER)
 # ==========================================
-def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, MediaContentType0: str):
+def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, MediaContentType0: str, base_url: str = ""):
     """Main function handling incoming WhatsApp messages in the background."""
     user_msg = Body.strip().lower()
     is_media = int(NumMedia) > 0
@@ -164,8 +164,8 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
     # --- 6.1 DYNAMIC UI / MENU DISPLAY ---
     if user_msg in ["menu", "תפריט", "היי", "שלום", "נקה", "hi", "hey", "אהלן"] and not is_media:
         menu_msg = (
-            "\u200E             *AI CENTER*\n\n"
-            "\u200Eאנא בחר את סוכן ה-AI המבוקש:\n\n"
+            "\u200E\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0*AI CENTER*\n\n"
+            "\u202Bאנא בחר את סוכן ה-AI המבוקש:\u202C\n\n"
             "\u200E0️⃣ *המנהל החכם (Smart Manager)* 🧠\n\n"
             "\u200E1️⃣ *ChatGPT (OpenAI)*\n\n"
             "\u200E2️⃣ *Claude (Anthropic)*\n\n"
@@ -180,30 +180,54 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         return
 
     # --- 6.2 USER SELECTION HANDLER ---
-    # Handles state changes when the user selects a number from the menu
     if user_msg in ["0", "1", "2", "3", "4", "5"]:
         set_user_state(From, user_msg)
         if user_msg == "0":
             msg = (
                 "\u202B✅ *המנהל החכם הופעל (Smart Manager)* 🧠\u202C\n\n"
                 "\u202B*תכונות המערכת:*\u202C\n\n"
-                "\u202B📄 *ניהול ידע:* למידה, ניתוח ושימור תוכן מקבצי PDF בזיכרון המערכת.\u202C\n\n\n"
-                "\u202B⚡ *אופטימיזציה:* התאמה אוטומטית של כלי ה-AI המהיר והיעיל ביותר לשאלה.\u202C\n\n\n"
-                "\u202B🎤 *עיבוד רב-מודלי:* ניתוח תמונות, הקלטות קוליות וקבצים ויזואליים.\u202C\n\n\n"
+                "\u202B📄 *ניהול ידע:* למידה, ניתוח ושימור תוכן מקבצי PDF.\u202C\n\n\n"
+                "\u202B⚡ *אופטימיזציה:* ניתוב אוטומטי למודל המהיר ביותר.\u202C\n\n\n"
+                "\u202B🎨 *הבנה ויצירה חזותית:* ניתוח תמונות והקלטות, ויצירת תמונות חדשות (התחל את המשפט במילה 'צייר').\u202C\n\n\n"
                 "\u202B_Developed by Roye Schechter_ ⚡\u202C"
             )
             send_whatsapp(From, msg)
         else:
-            names = {"1":"ChatGPT", "2":"Claude", "3":"Gemini", "4":"Llama", "5":"Grok"}
+            names = {"1": "ChatGPT", "2": "Claude", "3": "Gemini", "4": "Llama", "5": "Grok"}
             send_whatsapp(From, f"✅ המערכת הוגדרה לשימוש ב: *{names[user_msg]}*")
         return
 
     # --- 6.3 EXECUTION ENGINE ---
-    # Executes the logic based on the user's currently selected agent
     current_mode = get_user_state(From)
 
-    # OPTION 0: Smart Manager (Routing + Memory RAG)
+    # OPTION 0: Smart Manager
     if current_mode == "0":
+
+        # ---> תכונת הציור: בדיקה אם המשתמש ביקש תמונה <---
+        if Body.startswith("צייר"):
+            send_whatsapp(From, "🎨 *מצייר את זה עבורך, רק כמה שניות...*")
+            try:
+                prompt = Body.replace("צייר", "").strip()
+                res = gemini_client.models.generate_images(
+                    model='imagen-3.0-generate-001',
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/jpeg")
+                )
+                filename = f"{uuid.uuid4()}.jpg"
+                filepath = os.path.join(MEDIA_DIR, filename)
+
+                # שמירת התמונה בשרת הזמני
+                with open(filepath, "wb") as f:
+                    f.write(res.generated_images[0].image.image_bytes)
+
+                # שליחת הקישור של התמונה ל-Twilio
+                media_link = f"{base_url}/media/{filename}"
+                send_whatsapp(From, f"✅ הנה הציור שלך עבור:\n_{prompt}_", media_url=media_link)
+            except Exception as e:
+                print(f"🔥 Image Gen Error: {e}")
+                send_whatsapp(From, "❌ *שגיאה ביצירת התמונה.* ייתכן שהתיאור חסום (Safety) או שהשרת עמוס.")
+            return
+
         # Handle PDF uploads
         if is_media and "pdf" in content_type:
             send_whatsapp(From, "📚 *לומד את המסמך...*")
@@ -223,15 +247,15 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         if route == "GEMINI":
             try:
                 user_parts = [types.Part.from_text(text=Body or "Analyze this file")]
-                # Handle images/audio for Agent 0
                 if is_media and "pdf" not in content_type:
-                    res = requests.get(MediaUrl0, auth=(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")))
+                    res = requests.get(MediaUrl0,
+                                       auth=(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")))
                     ext = mimetypes.guess_extension(content_type) or ""
                     path = os.path.join(MEDIA_DIR, f"{uuid.uuid4()}{ext}")
                     with open(path, "wb") as f: f.write(res.content)
                     uploaded = gemini_client.files.upload(file=path, config={'mime_type': content_type})
                     user_parts.append(types.Part.from_uri(file_uri=uploaded.uri, mime_type=content_type))
-                    os.remove(path) # Clean up temp files
+                    os.remove(path)
 
                 response = gemini_client.models.generate_content(
                     model="gemini-2.0-flash",
@@ -243,7 +267,6 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 print(f"🔥 Agent 0 (Gemini) Error: {e}")
                 answer = "❌ שגיאה זמנית בחיבור לסוכן 0."
         else:
-            # Fallback to Groq Llama for fast text
             try:
                 comp = groq_client.chat.completions.create(
                     messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": Body}],
@@ -257,73 +280,75 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         send_whatsapp(From, answer)
         return
 
-    # OPTIONS 1-5: DIRECT AI AGENTS (Bypass Routing and Memory)
+    # OPTIONS 1-5: DIRECT AI AGENTS
     elif current_mode in ["1", "2", "3", "4", "5"]:
         answer = ""
         short_body = f"{Body} (Reply concisely in Hebrew)"
 
-        # 1. ChatGPT (OpenAI)
         if current_mode == "1":
             try:
                 import openai
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                comp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="gpt-4o",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except Exception as e:
-                answer = "⚠️ *החיבור ל-ChatGPT נכשל.*\nהאם הגדרת מפתח API חוקי והזנת כרטיס אשראי באתר של OpenAI?"
-
-        # 2. Claude (Anthropic)
+            except:
+                answer = "⚠️ *החיבור ל-ChatGPT נכשל.*"
         elif current_mode == "2":
             try:
                 import anthropic
                 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024, messages=[{"role": "user", "content": short_body}])
+                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024,
+                                             messages=[{"role": "user", "content": short_body}])
                 answer = msg.content[0].text
-            except Exception as e:
-                answer = "⚠️ *החיבור ל-Claude נכשל.*\nהאם הגדרת מפתח API חוקי והזנת כרטיס אשראי באתר של Anthropic?"
-
-        # 3. Gemini (Direct without Memory)
+            except:
+                answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
-                res = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=[short_body])
+                # תוקן כאן מ- gemini-2.5-flash ל- gemini-2.0-flash
+                res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[short_body])
                 answer = res.text
-            except Exception as e:
-                print(f"🔥 Agent 3 Error: {e}")
-                answer = "❌ חיבור ישיר ל-Gemini נכשל."
-
-        # 4. Llama (Direct via Groq)
+            except:
+                answer = "❌ חיבור ל-Gemini נכשל."
         elif current_mode == "4":
             try:
-                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": short_body}])
+                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile",
+                                                           messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except Exception as e:
-                print(f"🔥 Agent 4 Error: {e}")
+            except:
                 answer = "❌ חיבור ל-Llama נכשל."
-
-        # 5. Grok (xAI)
         elif current_mode == "5":
             try:
                 import openai
                 client = openai.OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
-                comp = client.chat.completions.create(model="grok-beta", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="grok-beta",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except Exception as e:
-                answer = "⚠️ *החיבור ל-Grok נכשל.*\nהאם הגדרת מפתח API חוקי והזנת כרטיס אשראי באתר של xAI?"
+            except:
+                answer = "⚠️ *החיבור ל-Grok נכשל.*"
 
-        if answer:
-            send_whatsapp(From, answer)
+        if answer: send_whatsapp(From, answer)
         return
 
 # ==========================================
 # MODULE 7: ENTRY POINT (FASTAPI)
 # ==========================================
+from fastapi.staticfiles import StaticFiles
+
 app = FastAPI()
 
+# Mount the media directory so Twilio can download generated images
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
 @app.post("/webhook")
-async def whatsapp_webhook(background_tasks: BackgroundTasks, From: str = Form(...), Body: str = Form(""),
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks, From: str = Form(...),
+                           Body: str = Form(""),
                            NumMedia: str = Form("0"), MediaUrl0: str = Form(None), MediaContentType0: str = Form(None)):
     """Receives webhook requests from Twilio and passes them to the background worker."""
-    background_tasks.add_task(background_worker, From, Body, NumMedia, MediaUrl0, MediaContentType0)
+    # Capture the exact base URL of the Render server dynamically
+    base_url = str(request.base_url).rstrip("/")
+
+    background_tasks.add_task(background_worker, From, Body, NumMedia, MediaUrl0, MediaContentType0, base_url)
     return Response(content="<Response></Response>", media_type="text/xml")
 
 if __name__ == "__main__":
