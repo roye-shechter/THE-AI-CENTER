@@ -254,7 +254,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     os.remove(path)
 
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.0-flash",  # <--- שודרג ל-2.0
+                    model="gemini-2.5-flash",
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         tools=[types.Tool(google_search=types.GoogleSearch())]
@@ -304,7 +304,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
-                    res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[Body])
+                    res = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=[Body])
                     answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
