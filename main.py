@@ -259,7 +259,10 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 
                 response = gemini_client.models.generate_content(
                     model="gemini-1.5-flash",
-                    config={'system_instruction': system_prompt},
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        tools=[{"google_search": {}}]
+                    ),
                     contents=[types.Content(role="user", parts=user_parts)]
                 )
                 answer = response.text
