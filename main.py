@@ -185,12 +185,11 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         if user_msg == "0":
             msg = (
                 "\u202B✅ *המנהל החכם הופעל (Smart Manager)* 🧠\u202C\n\n"
-                "\u202B*תכונות המערכת:*\u202C\n\n"
+                "\u202Bתכונות המערכת:\u202C\n\n"
                 "\u202B📄 *ניהול ידע:* למידה, ניתוח ושימור תוכן מקבצי PDF.\u202C\n\n\n"
                 "\u202B⚡ *אופטימיזציה:* ניתוב אוטומטי למודל המהיר ביותר.\u202C\n\n\n"
                 "\u202B🎨 *יצירה וניתוח ויזואלי:* יצירת תמונות חדשות (התחל משפט במילה 'צייר') וניתוח תמונות שתשלח.\u202C\n\n\n"
                 "\u202B🎤 *תמלול וניתוח שמע:* שלח הקלטת קול (Voice Note) או קובץ שמע, והבוט יתמלל וינתח אותם.\u202C\n\n\n"
-                "\u202B_Developed by Roye Schechter_ ⚡\u202C"
             )
             send_whatsapp(From, msg)
         else:
@@ -259,7 +258,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     os.remove(path)
 
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-1.5-flash",
                     config={'system_instruction': system_prompt},
                     contents=[types.Content(role="user", parts=user_parts)]
                 )
@@ -307,7 +306,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         elif current_mode == "3":
             try:
                 # תוקן כאן מ- gemini-2.5-flash ל- gemini-2.0-flash
-                res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[short_body])
+                res = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=[short_body])
                 answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
