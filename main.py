@@ -89,7 +89,7 @@ def send_whatsapp(to_number: str, content: str, media_url: str = None):
 # ==========================================
 def get_embedding(text: str):
     """Generates vector embeddings for text chunks using Gemini."""
-    target_model = "gemini-embedding-001"
+    target_model = "text-embedding-004"
     try:
         res = gemini_client.models.embed_content(
             model=target_model,
