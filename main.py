@@ -1,7 +1,7 @@
 """
 THE AI CENTER - ENTERPRISE MULTI-AGENT ARCHITECTURE
 Author: Roye Schechter
-Description: Robust infrastructure managing multiple AI providers + Long-Term Persona & Document Memory.
+Description: Robust infrastructure managing multiple AI providers + Long-Term Persona, Document Memory, & Short-Term Chat History.
 """
 
 import os
@@ -76,6 +76,23 @@ def get_user_persona(phone: str) -> str:
         facts = [row[0] for row in cursor.fetchall()]
         return "\n".join(facts) if facts else ""
 
+def save_chat_history(phone: str, role: str, text: str):
+    """Saves the recent conversation turns to provide short-term memory context."""
+    if not text: return
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT INTO chat_history (phone_number, role, message_text) VALUES (?, ?, ?)", (phone, role, text))
+    except Exception as e:
+        print(f"History DB Error: {e}")
+
+def get_chat_history(phone: str, limit: int = 6) -> str:
+    """Retrieves the last few messages to inject into the LLM prompt."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.execute("SELECT role, message_text FROM chat_history WHERE phone_number = ? ORDER BY id DESC LIMIT ?", (phone, limit))
+        rows = cursor.fetchall()[::-1]
+        if not rows: return ""
+        return "\n".join([f"{role}: {msg}" for role, msg in rows])
+
 # ==========================================
 # MODULE 3: COMMUNICATION GATEWAY
 # ==========================================
@@ -88,7 +105,6 @@ def send_whatsapp(to_number: str, content: str, media_url: str = None):
 
         for i, part in enumerate(parts):
             kwargs = {"from_": "whatsapp:+14155238886", "to": to_number, "body": part}
-            # Attach media ONLY to the first message part
             if media_url and i == 0:
                 kwargs["media_url"] = [media_url]
 
@@ -245,8 +261,12 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             send_whatsapp(From, f"✅ המערכת הוגדרה לשימוש ב: *{names[user_msg]}*")
         return
 
-    # --- 6.3 EXECUTION ENGINE (WITH GLOBAL MEMORY) ---
+    # --- 6.3 EXECUTION ENGINE (WITH GLOBAL MEMORY & CHAT HISTORY) ---
     current_mode = get_user_state(From)
+
+    # 1. Save user message to short-term history
+    if Body:
+        save_chat_history(From, "User", Body)
 
     # Launch background persona extraction for text messages
     if Body and not is_media:
@@ -255,6 +275,10 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
     # Fetch long-term persona context
     persona_context = get_user_persona(From)
     memory_injection = f"\n\n--- USER PROFILE (REMEMBER THIS) ---\n{persona_context}" if persona_context else ""
+
+    # 2. Fetch short-term chat history
+    chat_history = get_chat_history(From)
+    history_injection = f"\n\n--- RECENT CHAT HISTORY ---\n{chat_history}" if chat_history else ""
 
     # OPTION 0: Smart Manager
     if current_mode == "0":
@@ -276,18 +300,22 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                     f.write(res.generated_images[0].image.image_bytes)
 
                 media_link = f"{base_url}/media/{filename}"
-                send_whatsapp(From, f"✅ הנה הציור שלך עבור:\n_{prompt}_", media_url=media_link)
+                answer = f"✅ הנה הציור שלך עבור:\n_{prompt}_"
+                send_whatsapp(From, answer)
+                save_chat_history(From, "Assistant", answer)
             except Exception as e:
                 print(f"Image Gen Error: {e}")
                 send_whatsapp(From, "❌ *שגיאה ביצירת התמונה.* ייתכן שהתיאור חסום (Safety) או שהשרת עמוס.")
             return
 
-        # Handle PDF uploads
+        # Handle PDF uploads & Automatic Prompts
         if is_media and "pdf" in content_type:
             send_whatsapp(From, "📚 *לומד את המסמך...*")
             success = ingest_pdf(MediaUrl0, From)
-            if success: send_whatsapp(From, "✅ *סיימתי!*")
-            if not Body: Body = "אנא נתח את המסמך המצורף וסכם את הנקודות המרכזיות."
+            if success: send_whatsapp(From, "✅ *המסמך נשמר בזיכרון. מנתח אותו כעת...*")
+
+            if not Body:
+                Body = "אנא נתח את המסמך המצורף, סכם את התוכן שלו והצג את הנקודות המרכזיות."
             time.sleep(1)
 
         # Retrieve RAG context
@@ -296,6 +324,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         # Build System Prompt
         system_prompt = "You are the user assistant. ALWAYS reply in Hebrew. Be concise and professional. Do not exceed 500 characters unless necessary."
         system_prompt += memory_injection
+        system_prompt += history_injection
 
         if doc_context:
             system_prompt += f"\n\n--- CONTEXT FROM DOCUMENTS ---\n{doc_context}"
@@ -305,10 +334,12 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 
         if route == "GEMINI":
             try:
-                user_parts = [types.Part.from_text(text=Body or "Analyze this file")]
+                # SAFE AUDIO PROMPT: Responds naturally to any audio, uses history only if relevant.
+                text_input = Body if Body else "The user sent an audio/media file. Transcribe and analyze it, then respond naturally. If it relates to the RECENT CHAT HISTORY, use that context."
+                user_parts = [types.Part.from_text(text=text_input)]
+
                 if is_media:
-                    res = requests.get(MediaUrl0,
-                                       auth=(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")))
+                    res = requests.get(MediaUrl0, auth=(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")))
 
                     if "pdf" in content_type:
                         ext = ".pdf"
@@ -345,7 +376,10 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 print(f"Agent 0 (Llama) Error: {e}")
                 answer = "❌ שגיאה בחיבור לסוכן המהיר."
 
-        send_whatsapp(From, answer)
+        # Save assistant's answer to history
+        if answer:
+            save_chat_history(From, "Assistant", answer)
+            send_whatsapp(From, answer)
         return
 
     # OPTIONS 1-5: DIRECT AI AGENTS
@@ -353,9 +387,8 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         answer = ""
         short_body = f"{Body} (Reply concisely in Hebrew)"
 
-        # Inject memory into direct agents' prompts
-        if memory_injection:
-            short_body = f"{memory_injection}\n\nUser Message: {short_body}"
+        if memory_injection or history_injection:
+            short_body = f"{memory_injection}{history_injection}\n\nUser Message: {short_body}"
 
         if current_mode == "1":
             try:
@@ -395,6 +428,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 answer = "⚠️ *החיבור ל-Grok נכשל.*"
 
         if answer:
+            save_chat_history(From, "Assistant", answer)
             send_whatsapp(From, answer)
         return
 
@@ -403,7 +437,6 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 # ==========================================
 app = FastAPI()
 
-# Mount media directory for public access (used for Twilio image sharing)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
 @app.get("/")
@@ -421,9 +454,7 @@ async def whatsapp_webhook(
     MediaContentType0: str = Form(None)
 ):
     """Receives webhook requests from Twilio and passes them to the background worker."""
-    # Capture the exact base URL dynamically
     base_url = str(request.base_url).rstrip("/")
-
     background_tasks.add_task(background_worker, From, Body, NumMedia, MediaUrl0, MediaContentType0, base_url)
     return Response(content="<Response></Response>", media_type="text/xml")
 

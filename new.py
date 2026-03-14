@@ -96,7 +96,7 @@ def get_embedding(text: str):
         return res.embeddings[0].values
     except Exception as e:
         print(f"🔥 Embedding Error: {e}")
-        return [0.0] * 768 # רשת ביטחון כדי שהבוט לא ישתוק
+        return [0.0] * 768
 
 def ingest_pdf(file_url: str, phone: str):
     """Downloads a PDF, extracts text, chunks it, and uploads vectors to Pinecone."""
