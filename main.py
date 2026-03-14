@@ -93,6 +93,17 @@ def get_chat_history(phone: str, limit: int = 6) -> str:
         if not rows: return ""
         return "\n".join([f"{role}: {msg}" for role, msg in rows])
 
+def clear_chat_history(phone: str):
+    """
+    Permanently deletes the short-term chat history for a specific user from SQLite.
+    This ensures the AI starts with a clean slate (empty context window).
+    """
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("DELETE FROM chat_history WHERE phone_number = ?", (phone,))
+    except Exception as e:
+        print(f"Error clearing chat history: {e}")
+
 # ==========================================
 # MODULE 3: COMMUNICATION GATEWAY
 # ==========================================
@@ -226,7 +237,15 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
     content_type = (MediaContentType0 or "").lower()
 
     # --- 6.1 DYNAMIC UI / MENU DISPLAY ---
-    if user_msg in ["menu", "תפריט", "היי", "שלום", "נקה", "hi", "hey", "אהלן"] and not is_media:
+    if user_msg in ["menu", "תפריט", "היי", "שלום", "נקה", "hi", "hey", "אהלן", "clear"] and not is_media:
+
+        # Action: Clear memory if the user requested a reset
+        if user_msg in ["נקה", "clear"]:
+            clear_chat_history(From)
+            confirmation_msg = "🧹 *השיחה הנוכחית נוקתה ואותחלה בהצלחה!*"
+            send_whatsapp(From, confirmation_msg)
+            # Short pause to ensure the confirmation arrives before the menu
+            time.sleep(0.8)
         menu_msg = (
             "\u202B🔹 ══════ *AI CENTER* ══════ 🔹\u202C\n\n"
             "\u202Bאנא בחר את סוכן ה-AI המבוקש:\u202C\n\n"
