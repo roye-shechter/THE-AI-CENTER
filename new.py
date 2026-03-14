@@ -1,7 +1,7 @@
 """
 THE AI CENTER - ENTERPRISE MULTI-AGENT ARCHITECTURE
 Author: Roye Schechter
-Description: Robust infrastructure managing multiple AI providers + Long-Term Persona & Document Memory.
+Description: Robust infrastructure managing multiple AI providers + Long-Term Memory.
 """
 
 import os
@@ -11,10 +11,8 @@ import requests
 import io
 import time
 import mimetypes
-import threading
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Response, Request, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
 from PyPDF2 import PdfReader
 from pinecone import Pinecone
 from google import genai
@@ -29,25 +27,22 @@ load_dotenv()
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Initialize Pinecone Vector Database for Document Memory (RAG)
+# Initialize Pinecone Vector Database for Long-Term Memory
 pc = Pinecone(api_key=os.getenv("PINECONE_KEY"))
 index = pc.Index(os.getenv("PINECONE_INDEX_NAME") or "nexus-knowledge")
 
 DB_FILE = "nexus_system.db"
 MEDIA_DIR = "temp_media"
-if not os.path.exists(MEDIA_DIR):
-    os.makedirs(MEDIA_DIR)
+if not os.path.exists(MEDIA_DIR): os.makedirs(MEDIA_DIR)
 
 # ==========================================
 # MODULE 2: PERSISTENCE LAYER (DATABASE)
 # ==========================================
 def init_db():
-    """Initializes the SQLite database for user states, history, and persona memory."""
+    """Initializes the SQLite database for user states and history."""
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS users (phone_number TEXT PRIMARY KEY, active_model TEXT)')
         conn.execute('CREATE TABLE IF NOT EXISTS chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, phone_number TEXT, role TEXT, message_text TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)')
-        # Table for Long-Term Persona Memory
-        conn.execute('CREATE TABLE IF NOT EXISTS user_persona (phone_number TEXT, fact TEXT, UNIQUE(phone_number, fact))')
 init_db()
 
 def get_user_state(phone: str) -> str:
@@ -61,26 +56,14 @@ def set_user_state(phone: str, model_id: str):
     with sqlite3.connect(DB_FILE) as conn:
         conn.execute("INSERT INTO users (phone_number, active_model) VALUES (?, ?) ON CONFLICT(phone_number) DO UPDATE SET active_model = excluded.active_model", (phone, model_id))
 
-def save_user_fact(phone: str, fact: str):
-    """Saves a newly extracted personal fact about the user (ignores duplicates)."""
-    try:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT OR IGNORE INTO user_persona (phone_number, fact) VALUES (?, ?)", (phone, fact.strip()))
-    except Exception as e:
-        print(f"Persona DB Error: {e}")
-
-def get_user_persona(phone: str) -> str:
-    """Retrieves all stored personal facts about the user to inject into the AI context."""
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.execute("SELECT fact FROM user_persona WHERE phone_number = ?", (phone,))
-        facts = [row[0] for row in cursor.fetchall()]
-        return "\n".join(facts) if facts else ""
-
 # ==========================================
 # MODULE 3: COMMUNICATION GATEWAY
 # ==========================================
 def send_whatsapp(to_number: str, content: str, media_url: str = None):
-    """Sends WhatsApp messages via Twilio. Supports media attachments."""
+    """
+    Sends WhatsApp messages via Twilio.
+    Supports sending media (images) via public URLs.
+    """
     try:
         twilio = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
         limit = 1500
@@ -88,6 +71,7 @@ def send_whatsapp(to_number: str, content: str, media_url: str = None):
 
         for i, part in enumerate(parts):
             kwargs = {"from_": "whatsapp:+14155238886", "to": to_number, "body": part}
+
             # Attach media ONLY to the first message part
             if media_url and i == 0:
                 kwargs["media_url"] = [media_url]
@@ -95,10 +79,10 @@ def send_whatsapp(to_number: str, content: str, media_url: str = None):
             twilio.messages.create(**kwargs)
             time.sleep(0.5)
     except Exception as e:
-        print(f"Twilio Error: {e}")
+        print(f"🔥 Twilio Error: {e}")
 
 # ==========================================
-# MODULE 4: DOCUMENT MEMORY ENGINE (RAG)
+# MODULE 4: MEMORY ENGINE (RAG)
 # ==========================================
 def get_embedding(text: str):
     """Generates vector embeddings for text chunks using Gemini."""
@@ -111,8 +95,8 @@ def get_embedding(text: str):
         )
         return res.embeddings[0].values
     except Exception as e:
-        print(f"Embedding Error: {e}")
-        return [0.0] * 768
+        print(f"🔥 Embedding Error: {e}")
+        return [0.0] * 768 # רשת ביטחון כדי שהבוט לא ישתוק
 
 def ingest_pdf(file_url: str, phone: str):
     """Downloads a PDF, extracts text, chunks it, and uploads vectors to Pinecone."""
@@ -135,26 +119,25 @@ def ingest_pdf(file_url: str, phone: str):
         index.upsert(vectors=vectors, namespace="nexus-pro-docs")
         return True
     except Exception as e:
-        print(f"Document ingestion error: {e}")
+        print(f"Error in document ingestion: {e}")
         return False
 
 def retrieve_context(query: str, phone: str):
     """Searches Pinecone for relevant document chunks based on the user's query."""
-    try:
-        res = index.query(
-            vector=get_embedding(query), top_k=3, include_metadata=True,
-            namespace="nexus-pro-docs", filter={"phone": {"$eq": phone}}
-        )
-        return "\n---\n".join([m.metadata['text'] for m in res.matches if m.score > 0.7])
-    except Exception as e:
-        print(f"Pinecone Retrieval Error: {e}")
-        return ""
+    res = index.query(
+        vector=get_embedding(query), top_k=3, include_metadata=True,
+        namespace="nexus-pro-docs", filter={"phone": {"$eq": phone}}
+    )
+    return "\n---\n".join([m.metadata['text'] for m in res.matches if m.score > 0.7])
 
 # ==========================================
 # MODULE 5: SEMANTIC ROUTING ENGINE
 # ==========================================
 def intent_classifier(user_input: str, has_media: bool) -> str:
-    """Routes request to Gemini (multimodal/complex) or Llama (fast text chat)."""
+    """
+    Decides whether to route the request to Gemini (for media/complex tasks)
+    or to Llama (for fast text-based chat).
+    """
     if has_media or len(user_input) > 280: return "GEMINI"
     try:
         completion = groq_client.chat.completions.create(
@@ -163,48 +146,13 @@ def intent_classifier(user_input: str, has_media: bool) -> str:
             model="llama-3.3-70b-versatile", temperature=0, max_tokens=5
         )
         return completion.choices[0].message.content.strip().upper()
-    except:
-        return "GEMINI"
-
-# ==========================================
-# MODULE 5.5: LONG-TERM PERSONA EXTRACTION
-# ==========================================
-def extract_and_save_persona(phone: str, message: str):
-    """
-    Background worker: Analyzes user messages to extract permanent personal facts.
-    Uses Llama 3 via Groq for high-speed, low-cost extraction.
-    """
-    if not message or len(message) < 5:
-        return
-
-    prompt = f"""
-    Analyze the following user message. If the user explicitly states a clear, permanent personal fact about themselves (e.g., profession, name, age, hobbies, preferences), extract it concisely as a single sentence.
-    If there is no personal fact, or it is just a normal question/chat, output EXACTLY the word 'NONE'.
-    Message: '{message}'
-    """
-    try:
-        comp = groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": "You are a data extraction bot. Follow instructions perfectly."},
-                {"role": "user", "content": prompt}
-            ],
-            model="llama-3.3-70b-versatile",
-            temperature=0,
-            max_tokens=30
-        )
-        fact = comp.choices[0].message.content.strip()
-
-        if fact.upper() != "NONE" and len(fact) > 3 and "NONE" not in fact.upper():
-            save_user_fact(phone, fact)
-            print(f"New Persona Fact Learned for {phone}: {fact}")
-    except Exception as e:
-        print(f"Persona Extraction Error: {e}")
+    except: return "GEMINI"
 
 # ==========================================
 # MODULE 6: CORE WORKER (LOGIC CONTROLLER)
 # ==========================================
 def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, MediaContentType0: str, base_url: str = ""):
-    """Main function handling incoming WhatsApp messages."""
+    """Main function handling incoming WhatsApp messages in the background."""
     user_msg = Body.strip().lower()
     is_media = int(NumMedia) > 0
     content_type = (MediaContentType0 or "").lower()
@@ -245,21 +193,13 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             send_whatsapp(From, f"✅ המערכת הוגדרה לשימוש ב: *{names[user_msg]}*")
         return
 
-    # --- 6.3 EXECUTION ENGINE (WITH GLOBAL MEMORY) ---
+    # --- 6.3 EXECUTION ENGINE ---
     current_mode = get_user_state(From)
-
-    # Launch background persona extraction for text messages
-    if Body and not is_media:
-        threading.Thread(target=extract_and_save_persona, args=(From, Body)).start()
-
-    # Fetch long-term persona context
-    persona_context = get_user_persona(From)
-    memory_injection = f"\n\n--- USER PROFILE (REMEMBER THIS) ---\n{persona_context}" if persona_context else ""
 
     # OPTION 0: Smart Manager
     if current_mode == "0":
 
-        # Image Generation Logic
+        # ---> תכונת הציור: בדיקה אם המשתמש ביקש תמונה <---
         if Body.startswith("צייר"):
             send_whatsapp(From, "🎨 *מצייר את זה עבורך, רק כמה שניות...*")
             try:
@@ -272,13 +212,15 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 filename = f"{uuid.uuid4()}.jpg"
                 filepath = os.path.join(MEDIA_DIR, filename)
 
+                # שמירת התמונה בשרת הזמני
                 with open(filepath, "wb") as f:
                     f.write(res.generated_images[0].image.image_bytes)
 
+                # שליחת הקישור של התמונה ל-Twilio
                 media_link = f"{base_url}/media/{filename}"
                 send_whatsapp(From, f"✅ הנה הציור שלך עבור:\n_{prompt}_", media_url=media_link)
             except Exception as e:
-                print(f"Image Gen Error: {e}")
+                print(f"🔥 Image Gen Error: {e}")
                 send_whatsapp(From, "❌ *שגיאה ביצירת התמונה.* ייתכן שהתיאור חסום (Safety) או שהשרת עמוס.")
             return
 
@@ -287,18 +229,13 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             send_whatsapp(From, "📚 *לומד את המסמך...*")
             success = ingest_pdf(MediaUrl0, From)
             if success: send_whatsapp(From, "✅ *סיימתי!*")
-            if not Body: Body = "אנא נתח את המסמך המצורף וסכם את הנקודות המרכזיות."
+            if not Body: return
             time.sleep(1)
 
-        # Retrieve RAG context
-        doc_context = retrieve_context(Body, From) if Body else ""
-
-        # Build System Prompt
+        # Retrieve context from Pinecone
+        context = retrieve_context(Body, From) if Body else ""
         system_prompt = "You are the user assistant. ALWAYS reply in Hebrew. Be concise and professional. Do not exceed 500 characters unless necessary."
-        system_prompt += memory_injection
-
-        if doc_context:
-            system_prompt += f"\n\n--- CONTEXT FROM DOCUMENTS ---\n{doc_context}"
+        if context: system_prompt += f"\n\nContext from documents:\n{context}"
 
         # Route dynamically
         route = intent_classifier(Body, is_media)
@@ -306,18 +243,12 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         if route == "GEMINI":
             try:
                 user_parts = [types.Part.from_text(text=Body or "Analyze this file")]
-                if is_media:
+                if is_media and "pdf" not in content_type:
                     res = requests.get(MediaUrl0,
                                        auth=(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")))
-
-                    if "pdf" in content_type:
-                        ext = ".pdf"
-                    else:
-                        ext = mimetypes.guess_extension(content_type) or ""
-
+                    ext = mimetypes.guess_extension(content_type) or ""
                     path = os.path.join(MEDIA_DIR, f"{uuid.uuid4()}{ext}")
-                    with open(path, "wb") as f:
-                        f.write(res.content)
+                    with open(path, "wb") as f: f.write(res.content)
                     uploaded = gemini_client.files.upload(file=path, config={'mime_type': content_type})
                     user_parts.append(types.Part.from_uri(file_uri=uploaded.uri, mime_type=content_type))
                     os.remove(path)
@@ -332,7 +263,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 )
                 answer = response.text
             except Exception as e:
-                print(f"Agent 0 (Gemini) Error: {e}")
+                print(f"🔥 Agent 0 (gemini) Error: {e}")
                 answer = "❌ שגיאה זמנית בחיבור לסוכן 0."
         else:
             try:
@@ -342,7 +273,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
                 )
                 answer = comp.choices[0].message.content
             except Exception as e:
-                print(f"Agent 0 (Llama) Error: {e}")
+                print(f"🔥 Agent 0 (Llama) Error: {e}")
                 answer = "❌ שגיאה בחיבור לסוכן המהיר."
 
         send_whatsapp(From, answer)
@@ -353,15 +284,12 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
         answer = ""
         short_body = f"{Body} (Reply concisely in Hebrew)"
 
-        # Inject memory into direct agents' prompts
-        if memory_injection:
-            short_body = f"{memory_injection}\n\nUser Message: {short_body}"
-
         if current_mode == "1":
             try:
                 import openai
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                comp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="gpt-4o",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
             except:
                 answer = "⚠️ *החיבור ל-ChatGPT נכשל.*"
@@ -369,19 +297,21 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             try:
                 import anthropic
                 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024, messages=[{"role": "user", "content": short_body}])
+                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024,
+                                             messages=[{"role": "user", "content": short_body}])
                 answer = msg.content[0].text
             except:
                 answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
-                res = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=[short_body])
-                answer = res.text
+                    res = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=[Body])
+                    answer = res.text
             except:
                 answer = "❌ חיבור ל-Gemini נכשל."
         elif current_mode == "4":
             try:
-                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": short_body}])
+                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile",
+                                                           messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
             except:
                 answer = "❌ חיבור ל-Llama נכשל."
@@ -389,39 +319,33 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
             try:
                 import openai
                 client = openai.OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
-                comp = client.chat.completions.create(model="grok-beta", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="grok-beta",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
             except:
                 answer = "⚠️ *החיבור ל-Grok נכשל.*"
 
-        if answer:
-            send_whatsapp(From, answer)
+        if answer: send_whatsapp(From, answer)
         return
 
 # ==========================================
 # MODULE 7: ENTRY POINT (FASTAPI)
 # ==========================================
+from fastapi.staticfiles import StaticFiles
+
 app = FastAPI()
 
-# Mount media directory for public access (used for Twilio image sharing)
+# Mount the media directory so Twilio can download generated images
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
-
 @app.get("/")
 def health_check():
     return {"status": "AI CENTER is running perfectly 🚀"}
-
 @app.post("/webhook")
-async def whatsapp_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    From: str = Form(...),
-    Body: str = Form(""),
-    NumMedia: str = Form("0"),
-    MediaUrl0: str = Form(None),
-    MediaContentType0: str = Form(None)
-):
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks, From: str = Form(...),
+                           Body: str = Form(""),
+                           NumMedia: str = Form("0"), MediaUrl0: str = Form(None), MediaContentType0: str = Form(None)):
     """Receives webhook requests from Twilio and passes them to the background worker."""
-    # Capture the exact base URL dynamically
+    # Capture the exact base URL of the Render server dynamically
     base_url = str(request.base_url).rstrip("/")
 
     background_tasks.add_task(background_worker, From, Body, NumMedia, MediaUrl0, MediaContentType0, base_url)
