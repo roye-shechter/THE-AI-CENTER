@@ -4,10 +4,15 @@ venv/
 .venv/
 
 # Database
+*.db
+*.sqlite
+*.sqlite3
 bot_database.db
+nexus_system.db
 
 # Media
 images/
+temp_media/
 
 # IDE and Python
 .idea/

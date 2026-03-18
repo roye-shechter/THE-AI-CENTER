@@ -12,6 +12,8 @@ import io
 import time
 import mimetypes
 import threading
+import openai
+import anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Response, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +40,23 @@ MEDIA_DIR = "temp_media"
 if not os.path.exists(MEDIA_DIR):
     os.makedirs(MEDIA_DIR)
 
+
+def cleanup_temp_media():
+    """Background job: Deletes media files older than 1 hour to prevent storage leaks."""
+    while True:
+        try:
+            now = time.time()
+            for filename in os.listdir(MEDIA_DIR):
+                filepath = os.path.join(MEDIA_DIR, filename)
+                # Check if it's a file and older than 3600 seconds (1 hour)
+                if os.path.isfile(filepath) and os.stat(filepath).st_mtime < now - 3600:
+                    os.remove(filepath)
+                    print(f"🧹 Cleaned up old media file: {filename}")
+        except Exception as e:
+            print(f"Cleanup Error: {e}")
+
+        # Sleep for 1 hour before checking again
+        time.sleep(3600)
 # ==========================================
 # MODULE 2: PERSISTENCE LAYER (DATABASE)
 # ==========================================
@@ -82,6 +101,15 @@ def save_chat_history(phone: str, role: str, text: str):
     try:
         with sqlite3.connect(DB_FILE) as conn:
             conn.execute("INSERT INTO chat_history (phone_number, role, message_text) VALUES (?, ?, ?)", (phone, role, text))
+            # Keep only the last 20 messages per user to prevent DB bloat
+            conn.execute("""
+                DELETE FROM chat_history 
+                WHERE id NOT IN (
+                    SELECT id FROM chat_history 
+                    WHERE phone_number = ? 
+                    ORDER BY id DESC LIMIT 20
+                ) AND phone_number = ?
+            """, (phone, phone))
     except Exception as e:
         print(f"History DB Error: {e}")
 
@@ -182,7 +210,8 @@ def retrieve_context(query: str, phone: str):
 # ==========================================
 def intent_classifier(user_input: str, has_media: bool) -> str:
     """Routes request to Gemini (multimodal/complex) or Llama (fast text chat)."""
-    if has_media or len(user_input) > 280: return "GEMINI"
+    threshold = int(os.getenv("ROUTING_THRESHOLD", 280))
+    if has_media or len(user_input) > threshold: return "GEMINI"
     try:
         completion = groq_client.chat.completions.create(
             messages=[{"role": "system", "content": "Route to 'GEMINI' for complex/multimodal tasks, 'LLAMA' for chat. Respond ONLY with the tag."},
@@ -190,7 +219,8 @@ def intent_classifier(user_input: str, has_media: bool) -> str:
             model="llama-3.3-70b-versatile", temperature=0, max_tokens=5
         )
         return completion.choices[0].message.content.strip().upper()
-    except:
+    except Exception as e:
+        print(f"Intent Classifier Error: {e}")
         return "GEMINI"
 
 # ==========================================
@@ -320,7 +350,7 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 
                 media_link = f"{base_url}/media/{filename}"
                 answer = f"✅ הנה הציור שלך עבור:\n_{prompt}_"
-                send_whatsapp(From, answer)
+                send_whatsapp(From, answer, media_url=media_link)
                 save_chat_history(From, "Assistant", answer)
             except Exception as e:
                 print(f"Image Gen Error: {e}")
@@ -411,39 +441,46 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 
         if current_mode == "1":
             try:
-                import openai
                 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                comp = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="gpt-4o",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except:
+            except Exception as e:
+                print(f"Agent 1 (OpenAI) Error: {e}")
                 answer = "⚠️ *החיבור ל-ChatGPT נכשל.*"
         elif current_mode == "2":
             try:
                 import anthropic
                 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024, messages=[{"role": "user", "content": short_body}])
+                msg = client.messages.create(model="claude-3-5-sonnet-20241022", max_tokens=1024,
+                                             messages=[{"role": "user", "content": short_body}])
                 answer = msg.content[0].text
-            except:
+            except Exception as e:
+                print(f"Agent 2 (Claude) Error: {e}")
                 answer = "⚠️ *החיבור ל-Claude נכשל.*"
         elif current_mode == "3":
             try:
                 res = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=[short_body])
                 answer = res.text
-            except:
+            except Exception as e:
+                print(f"Agent 3 (Gemini) Error: {e}")
                 answer = "❌ חיבור ל-Gemini נכשל."
         elif current_mode == "4":
             try:
-                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": short_body}])
+                comp = groq_client.chat.completions.create(model="llama-3.3-70b-versatile",
+                                                           messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except:
+            except Exception as e:
+                print(f"Agent 4 (Llama) Error: {e}")
                 answer = "❌ חיבור ל-Llama נכשל."
         elif current_mode == "5":
             try:
-                import openai
                 client = openai.OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
-                comp = client.chat.completions.create(model="grok-beta", messages=[{"role": "user", "content": short_body}])
+                comp = client.chat.completions.create(model="grok-beta",
+                                                      messages=[{"role": "user", "content": short_body}])
                 answer = comp.choices[0].message.content
-            except:
+            except Exception as e:
+                print(f"Agent 5 (Grok) Error: {e}")
                 answer = "⚠️ *החיבור ל-Grok נכשל.*"
 
         if answer:
@@ -477,7 +514,13 @@ async def whatsapp_webhook(
     background_tasks.add_task(background_worker, From, Body, NumMedia, MediaUrl0, MediaContentType0, base_url)
     return Response(content="<Response></Response>", media_type="text/xml")
 
+
 if __name__ == "__main__":
     import uvicorn
+
+    # Start the background cleanup job
+    cleanup_thread = threading.Thread(target=cleanup_temp_media, daemon=True)
+    cleanup_thread.start()
+
     port = int(os.environ.get("PORT", 8001))
     uvicorn.run(app, host="0.0.0.0", port=port)
