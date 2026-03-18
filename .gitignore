@@ -12,7 +12,8 @@ nexus_system.db
 
 # Media
 images/
-temp_media/
+temp_media/*
+!.gitignore
 
 # IDE and Python
 .idea/

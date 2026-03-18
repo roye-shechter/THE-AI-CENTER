@@ -492,6 +492,8 @@ def background_worker(From: str, Body: str, NumMedia: str, MediaUrl0: str, Media
 # MODULE 7: ENTRY POINT (FASTAPI)
 # ==========================================
 app = FastAPI()
+if not os.path.exists(MEDIA_DIR):
+    os.makedirs(MEDIA_DIR)
 
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
